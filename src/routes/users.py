@@ -4,6 +4,8 @@ from ..models import User as UserModel
 from ..db_models import User as UserDB
 from ..database.database import get_db
 from bcrypt import hashpw, gensalt
+from ..auth import verify_password, create_access_token
+from ..models import UserLogin  # You'll need to create this model
 import logging
 
 
@@ -27,3 +29,16 @@ def create_user(user: UserModel, db: Session = Depends(get_db)):
         logging.error(f"Error creating user: {e}")
         raise HTTPException(status_code=400, detail="Username or email already exists")
     return user
+
+@router.post("/login")
+def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(UserDB).filter(UserDB.username == user_credentials.username).first()
+    
+    if not user or not verify_password(user_credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+    
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
