@@ -1,0 +1,48 @@
+{
+  "session": {
+    "started_at": "2025-05-23T09:00:00Z",
+    "finished_at": "2025-05-23T10:30:00Z",
+    "user_id": "testuser123",
+    "notes": "great benching, mediocre squatting",
+    "workouts": [
+      {
+        "name": "Bench Press",
+        "started_at": "2025-05-23T09:00:00Z",
+        "finished_at": "2025-05-23T09:30:00Z",
+        "sets": [
+          {
+            "started_at": "2025-05-23T09:00:00Z",
+            "finished_at": "2025-05-23T09:05:00Z",
+            "reps": {
+              "count": 8,
+              "intensity": "moderate"
+            }
+          },
+          {
+            "started_at": "2025-05-23T09:10:00Z",
+            "finished_at": "2025-05-23T09:15:00Z",
+            "reps": {
+              "count": 6,
+              "intensity": "high"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Squats",
+        "started_at": "2025-05-23T09:35:00Z",
+        "finished_at": "2025-05-23T10:00:00Z",
+        "sets": [
+          {
+            "started_at": "2025-05-23T09:35:00Z",
+            "finished_at": "2025-05-23T09:40:00Z",
+            "reps": {
+              "count": 10,
+              "intensity": "low"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
