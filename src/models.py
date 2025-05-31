@@ -15,7 +15,7 @@ class UserLogin(BaseModel):
 class Reps(BaseModel):
     intensity: str
     count: int
-    weight: int
+    weight: Optional[int] = None
 
     @validator("count")
     def check_at_least_one_rep(cls, v):
@@ -25,8 +25,8 @@ class Reps(BaseModel):
     
     @validator("weight")
     def check_at_least_some_weight(cls, v):
-        if v < 1:
-            raise ValueError("At least 1 pound is required in the weight of a set")
+        if v is not None and v < 1:
+            raise ValueError("If v exists, it must be positive and at least 1")
         return v
 
 class Set(BaseModel):
@@ -63,7 +63,7 @@ class Session(BaseModel):
     workouts: List[Workout]
     started_at: datetime
     finished_at: datetime
-    notes: Optional[str]
+    notes: Optional[str] = None
 
     @validator("finished_at")
     def check_finished_after_started(cls, v, values):
@@ -76,11 +76,6 @@ class Session(BaseModel):
         if len(v) < 1:
             raise ValueError("At least one workout is required in a session")
         return v
-
-class User(BaseModel):
-    username: str
-    email: str
-    password: str
 
 def create_session(json_input: Union[str, bytes, bytearray, dict]) -> Session:
     from pydantic import ValidationError

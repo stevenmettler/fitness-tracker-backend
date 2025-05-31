@@ -45,7 +45,8 @@ def create_session(
             )
             db_rep = RepsDB(
                 count=set_.reps.count, 
-                intensity=set_.reps.intensity
+                intensity=set_.reps.intensity,
+                weight=set_.reps.weight
             )
             
             # Set up the relationship properly
