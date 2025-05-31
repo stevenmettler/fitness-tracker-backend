@@ -15,11 +15,18 @@ class UserLogin(BaseModel):
 class Reps(BaseModel):
     intensity: str
     count: int
+    weight: int
 
     @validator("count")
     def check_at_least_one_rep(cls, v):
         if v < 1:
             raise ValueError("At lease one rep is required in a set")
+        return v
+    
+    @validator("weight")
+    def check_at_least_some_weight(cls, v):
+        if v < 1:
+            raise ValueError("At least 1 pound is required in the weight of a set")
         return v
 
 class Set(BaseModel):

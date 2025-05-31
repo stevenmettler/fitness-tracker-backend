@@ -59,6 +59,7 @@ class RepsDB(Base):
     set_id = Column(BigInteger, ForeignKey("sets.id"), nullable=False)
     count = Column(Integer, nullable=False)
     intensity = Column(String(20), nullable=False)
+    weight = Column(Integer, nullable=False)
     
     # Belongs to one set
     set = relationship("SetDB", back_populates="reps")

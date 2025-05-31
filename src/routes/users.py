@@ -42,3 +42,11 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=UserModel)
+def get_current_user_info(current_user: UserDB = Depends(get_current_user)):
+    return UserModel(
+        username=current_user.username,
+        email=current_user.email,
+        password="***"  # Don't return the actual password
+    )
