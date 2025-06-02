@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware  # Add this import
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from src.database.database import get_db, Base, engine
@@ -12,6 +13,19 @@ import os
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(title="Fitness Tracker API", version="1.0.0")
+
+# Add CORS middleware - ADD THIS SECTION
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # React development server
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",  # In case React runs on 3001
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Add rate limiting middleware
 app.state.limiter = limiter

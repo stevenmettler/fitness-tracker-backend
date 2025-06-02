@@ -84,7 +84,7 @@ def create_user(request: Request, user: UserModel, db: Session = Depends(get_db)
     return user
 
 @router.post("/login")
-@limiter.limit("10/minute")  # 10 login attempts per minute per IP
+@limiter.limit("10/minute")
 def login(request: Request, user_credentials: UserLogin, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.username == user_credentials.username).first()
     
@@ -94,5 +94,9 @@ def login(request: Request, user_credentials: UserLogin, db: Session = Depends(g
             detail="Invalid username or password"
         )
     
-    access_token = create_access_token(data={"sub": user.username})
+    # Include user_id in the JWT token payload
+    access_token = create_access_token(data={
+        "sub": user.username,
+        "user_id": user.id  # Add this line!
+    })
     return {"access_token": access_token, "token_type": "bearer"}
