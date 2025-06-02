@@ -86,17 +86,27 @@ def create_user(request: Request, user: UserModel, db: Session = Depends(get_db)
 @router.post("/login")
 @limiter.limit("10/minute")
 def login(request: Request, user_credentials: UserLogin, db: Session = Depends(get_db)):
+    print(f"DEBUG: Login attempt for username: {user_credentials.username}")  # Add this
+    
     user = db.query(UserDB).filter(UserDB.username == user_credentials.username).first()
+    print(f"DEBUG: User found in DB: {user is not None}")  # Add this
+    
+    if user:
+        print(f"DEBUG: User ID: {user.id}, Username: {user.username}")  # Add this
+        password_check = verify_password(user_credentials.password, user.password_hash)
+        print(f"DEBUG: Password verification: {password_check}")  # Add this
     
     if not user or not verify_password(user_credentials.password, user.password_hash):
+        print("DEBUG: Login failed - invalid credentials")  # Add this
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
     
-    # Include user_id in the JWT token payload
+    print("DEBUG: Creating access token")  # Add this
     access_token = create_access_token(data={
         "sub": user.username,
-        "user_id": user.id  # Add this line!
+        "user_id": user.id
     })
+    print("DEBUG: Login successful")  # Add this
     return {"access_token": access_token, "token_type": "bearer"}

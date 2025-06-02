@@ -1,65 +1,100 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Request, APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from ..models import Session as SessionModel
 from ..db_models import SessionDB, WorkoutDB, SetDB, RepsDB, User
 from ..database.database import get_db
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from ..auth import get_current_user
+from ..validation.validation import (
+    validate_workout_name,
+    validate_notes,
+    validate_intensity,
+    validate_rep_count,
+    validate_weight,
+    validate_session_limits,
+    validate_workout_limits
+)
 from typing import List
 from datetime import datetime
+import logging
+
+# Create limiter for this module
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 @router.post("/", response_model=SessionModel)
+@limiter.limit("10/minute") 
 def create_session(
+    request: Request, 
     session: SessionModel, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Verify the user_id in the session matches the authenticated user
-    if session.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403, 
-            detail="Cannot create session for another user"
-        )
-    
-    # Create Reps, Sets, Workouts, Session in database
-    db_session = SessionDB(
-        user_id=session.user_id,
-        started_at=session.started_at,
-        finished_at=session.finished_at,
-        notes=session.notes
-    )
-    
-    for workout in session.workouts:
-        db_workout = WorkoutDB(
-            name=workout.name,
-            started_at=workout.started_at,
-            finished_at=workout.finished_at
-        )
-        db_session.workouts.append(db_workout)
+    try:
+        # Additional server-side validation (Pydantic already validated, but extra safety)
+        total_sets = sum(len(workout.sets) for workout in session.workouts)
+        validate_session_limits(len(session.workouts), total_sets)
         
-        for set_ in workout.sets:
-            db_set = SetDB(
-                started_at=set_.started_at, 
-                finished_at=set_.finished_at
-            )
-            db_rep = RepsDB(
-                count=set_.reps.count, 
-                intensity=set_.reps.intensity,
-                weight=set_.reps.weight
-            )
+        # Create session with validated and sanitized data
+        db_session = SessionDB(
+            user_id=current_user.id,  # FORCE authenticated user's ID (ignore client data)
+            started_at=session.started_at,
+            finished_at=session.finished_at,
+            notes=validate_notes(session.notes)  # Sanitize notes
+        )
+        
+        for workout in session.workouts:
+            # Validate and sanitize workout data
+            sanitized_name = validate_workout_name(workout.name)
+            validate_workout_limits(len(workout.sets), sanitized_name)
             
-            # Set up the relationship properly
-            db_set.reps = db_rep
+            db_workout = WorkoutDB(
+                name=sanitized_name,
+                started_at=workout.started_at,
+                finished_at=workout.finished_at
+            )
+            db_session.workouts.append(db_workout)
             
-            # Add both to the session
-            db.add(db_rep)
-            db_workout.sets.append(db_set)
-    
-    db.add(db_session)
-    db.commit()
-    db.refresh(db_session)
-    return session
+            for set_ in workout.sets:
+                # Additional validation for sets (double-check after Pydantic)
+                validated_count = validate_rep_count(set_.reps.count)
+                validated_weight = validate_weight(set_.reps.weight)
+                validated_intensity = validate_intensity(set_.reps.intensity)
+                
+                db_set = SetDB(
+                    started_at=set_.started_at, 
+                    finished_at=set_.finished_at
+                )
+                
+                db_rep = RepsDB(
+                    count=validated_count,
+                    intensity=validated_intensity,
+                    weight=validated_weight
+                )
+                
+                # Set up the relationship properly
+                db_set.reps = db_rep
+                
+                # Add both to the session
+                db.add(db_rep)
+                db_workout.sets.append(db_set)
+        
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+        
+        logging.info(f"Session created successfully for user {current_user.id} with {len(session.workouts)} workouts")
+        return session
+        
+    except ValueError as ve:
+        logging.warning(f"Validation error in session creation for user {current_user.id}: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error creating session for user {current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create session")
 
 @router.get("/", response_model=List[SessionModel])
 def get_my_sessions(
