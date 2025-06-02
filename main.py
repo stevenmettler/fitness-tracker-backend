@@ -18,9 +18,9 @@ app = FastAPI(title="Fitness Tracker API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # React development server
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",  # In case React runs on 3001
+        "http://localhost:3000",  # Local development
+        "http://localhost:3001",  # Alternative React port
+        "https://fitness-tracker-frontend-bice.vercel.app",  
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
