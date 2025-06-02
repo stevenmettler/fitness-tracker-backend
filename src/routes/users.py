@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from ..models import User as UserModel
@@ -24,12 +25,69 @@ def validate_email(email: str) -> bool:
 
 def validate_username(username: str) -> bool:
     """Username validation - alphanumeric and underscore only"""
-    pattern = r'^[a-zA-Z0-9_]{3,50}$'
+    # Username should already be normalized to lowercase before this check
+    pattern = r'^[a-z0-9_]{3,50}$'  # Only lowercase now
     return re.match(pattern, username) is not None
 
 @router.post("/", response_model=UserModel)
-@limiter.limit("5/minute")  # Only 5 registrations per minute per IP
+@limiter.limit("5/minute")
 def create_user(request: Request, user: UserModel, db: Session = Depends(get_db)):
+    logging.debug(f"Creating user: {user.model_dump()}")
+    
+    # Normalize username to lowercase for storage and comparison
+    normalized_username = user.username.lower().strip()
+    
+    # Check if registration is disabled in production
+    if os.getenv("ENVIRONMENT") == "production" and os.getenv("REGISTRATION_ENABLED") != "true":
+        raise HTTPException(status_code=403, detail="Registration is currently disabled")
+    
+    # Additional validation (using normalized username)
+    if not validate_username(normalized_username):
+        raise HTTPException(
+            status_code=400, 
+            detail="Username must be 3-50 characters, alphanumeric and underscore only"
+        )
+    
+    if not validate_email(user.email):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid email format"
+        )
+    
+    if len(user.password) < 8:
+        raise HTTPException(
+            status_code=400, 
+            detail="Password must be at least 8 characters"
+        )
+    
+    # Check if user already exists (case-insensitive check)
+    existing_user = db.query(UserDB).filter(
+        (func.lower(UserDB.username) == normalized_username) | 
+        (func.lower(UserDB.email) == user.email.lower())
+    ).first()
+    
+    if existing_user:
+        if existing_user.username.lower() == normalized_username:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        else:
+            raise HTTPException(status_code=400, detail="Email already exists")
+    
+    hashed_password = hashpw(user.password.encode("utf-8"), gensalt()).decode("utf-8")
+    db_user = UserDB(
+        username=normalized_username,  # Store in lowercase
+        email=user.email.lower(),      # Also normalize email
+        password_hash=hashed_password
+    )
+    db.add(db_user)
+    try:
+        db.commit()
+        db.refresh(db_user)
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create user")
+    
+    return user
     logging.debug(f"Creating user: {user.model_dump()}")
     
     # Check if registration is disabled in production
@@ -86,27 +144,34 @@ def create_user(request: Request, user: UserModel, db: Session = Depends(get_db)
 @router.post("/login")
 @limiter.limit("10/minute")
 def login(request: Request, user_credentials: UserLogin, db: Session = Depends(get_db)):
-    print(f"DEBUG: Login attempt for username: {user_credentials.username}")  # Add this
+    print(f"DEBUG: Login attempt for username: {user_credentials.username}")
     
-    user = db.query(UserDB).filter(UserDB.username == user_credentials.username).first()
-    print(f"DEBUG: User found in DB: {user is not None}")  # Add this
+    # Normalize username for lookup (case-insensitive)
+    normalized_username = user_credentials.username.lower().strip()
+    
+    # Case-insensitive username lookup
+    user = db.query(UserDB).filter(
+        func.lower(UserDB.username) == normalized_username
+    ).first()
+    
+    print(f"DEBUG: User found in DB: {user is not None}")
     
     if user:
-        print(f"DEBUG: User ID: {user.id}, Username: {user.username}")  # Add this
+        print(f"DEBUG: User ID: {user.id}, Username: {user.username}")
         password_check = verify_password(user_credentials.password, user.password_hash)
-        print(f"DEBUG: Password verification: {password_check}")  # Add this
+        print(f"DEBUG: Password verification: {password_check}")
     
     if not user or not verify_password(user_credentials.password, user.password_hash):
-        print("DEBUG: Login failed - invalid credentials")  # Add this
+        print("DEBUG: Login failed - invalid credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
     
-    print("DEBUG: Creating access token")  # Add this
+    print("DEBUG: Creating access token")
     access_token = create_access_token(data={
-        "sub": user.username,
+        "sub": user.username,  # Keep original stored format
         "user_id": user.id
     })
-    print("DEBUG: Login successful")  # Add this
+    print("DEBUG: Login successful")
     return {"access_token": access_token, "token_type": "bearer"}
