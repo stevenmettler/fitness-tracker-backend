@@ -97,7 +97,7 @@ class Workout(BaseModel):
         return self
 
 class Session(BaseModel):
-    user_id: int  # This will be ignored by backend but kept for compatibility
+    # user_id: int  # REMOVE this line entirely - backend gets user from JWT
     workouts: List[Workout]
     started_at: datetime
     finished_at: datetime
