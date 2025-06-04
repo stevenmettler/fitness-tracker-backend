@@ -11,7 +11,7 @@ import os
 import secrets
 
 # Security configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
@@ -27,7 +27,7 @@ def generate_user_session_id():
     return secrets.token_urlsafe(32)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create access token with only username and session ID"""
+    """Create access token with only username and session ID - NO user_id"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -36,7 +36,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     
     # Only include non-sensitive data in JWT
     secure_payload = {
-        "sub": to_encode["sub"],  # username
+        "sub": to_encode["sub"],  # username only
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access"
