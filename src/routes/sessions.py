@@ -5,7 +5,7 @@ from ..db_models import SessionDB, WorkoutDB, SetDB, RepsDB, User
 from ..database.database import get_db
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from ..auth import get_current_user
+from ..auth import get_current_user  # This now returns User object, not user_id
 from ..validation.validation import (
     validate_workout_name,
     validate_notes,
@@ -30,16 +30,16 @@ def create_session(
     request: Request, 
     session: SessionModel, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)  # This is now a User object
 ):
     try:
         # Additional server-side validation (Pydantic already validated, but extra safety)
         total_sets = sum(len(workout.sets) for workout in session.workouts)
         validate_session_limits(len(session.workouts), total_sets)
         
-        # Create session with validated and sanitized data
+        # Create session with authenticated user's ID (from User object, not JWT)
         db_session = SessionDB(
-            user_id=current_user.id,  # FORCE authenticated user's ID (ignore client data)
+            user_id=current_user.id,  # Get ID from authenticated User object
             started_at=session.started_at,
             finished_at=session.finished_at,
             notes=validate_notes(session.notes)  # Sanitize notes
@@ -85,21 +85,21 @@ def create_session(
         db.commit()
         db.refresh(db_session)
         
-        logging.info(f"Session created successfully for user {current_user.id} with {len(session.workouts)} workouts")
+        logging.info(f"Session created successfully for user {current_user.username} (ID: {current_user.id}) with {len(session.workouts)} workouts")
         return session
         
     except ValueError as ve:
-        logging.warning(f"Validation error in session creation for user {current_user.id}: {ve}")
+        logging.warning(f"Validation error in session creation for user {current_user.username}: {ve}")
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         db.rollback()
-        logging.error(f"Error creating session for user {current_user.id}: {e}")
+        logging.error(f"Error creating session for user {current_user.username}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create session")
 
 @router.get("/", response_model=List[SessionModel])
 def get_my_sessions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)  # User object
 ):
     """Get all sessions for the authenticated user"""
     sessions = db.query(SessionDB)\
@@ -119,7 +119,7 @@ def get_my_sessions(
 def get_sessions(
     user_id: int, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)  # User object
 ):
     """Get sessions for a specific user (only if it's the authenticated user)"""
     if user_id != current_user.id:
